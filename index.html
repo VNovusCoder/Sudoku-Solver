@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f5f0">
+  <title>Sudoku Studio — Solve a puzzle</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #20241f;
+      --muted: #7c8178;
+      --line: #dfe2d9;
+      --accent: #386b53;
+      --accent-light: #e9f1e9;
+      --paper: #fff;
+      --page: #f5f5f0;
+      --danger: #b84c3f;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at 12% 7%, rgba(220, 231, 214, .48), transparent 30rem),
+        var(--page);
+    }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+
+    .shell { width: min(1100px, calc(100% - 48px)); margin: 0 auto; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 84px;
+      border-bottom: 1px solid rgba(32, 36, 31, .09);
+    }
+
+    .brand { display: flex; align-items: center; gap: 11px; font-size: 14px; font-weight: 750; letter-spacing: .04em; }
+    .brand-mark {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 10px;
+      color: #fff;
+      background: var(--accent);
+      font-size: 17px;
+      font-weight: 600;
+    }
+    .header-note { color: var(--muted); font-size: 13px; }
+
+    main { padding: 62px 0 74px; }
+    .intro { max-width: 650px; margin: 0 auto 34px; text-align: center; }
+    .eyebrow { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+    h1 { margin: 12px 0 10px; font-family: Georgia, "Times New Roman", serif; font-size: clamp(36px, 5vw, 54px); font-weight: 500; letter-spacing: -.045em; }
+    .intro p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(360px, 540px) minmax(250px, 310px);
+      align-items: start;
+      justify-content: center;
+      gap: clamp(28px, 6vw, 74px);
+    }
+
+    .board-wrap { width: 100%; padding: 13px; border: 1px solid #e6e8e0; border-radius: 17px; background: var(--paper); box-shadow: 0 18px 50px rgba(41, 52, 40, .07); }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      overflow: hidden;
+      border: 2px solid #34443a;
+      border-radius: 5px;
+      aspect-ratio: 1;
+    }
+
+    .cell {
+      width: 100%;
+      min-width: 0;
+      padding: 0;
+      border: 0;
+      border-right: 1px solid #d9ded6;
+      border-bottom: 1px solid #d9ded6;
+      border-radius: 0;
+      outline: 0;
+      color: var(--accent);
+      background: #fff;
+      text-align: center;
+      font-size: clamp(17px, 3.1vw, 25px);
+      font-weight: 500;
+      caret-color: var(--accent);
+      transition: background .12s ease, box-shadow .12s ease;
+    }
+    .cell:nth-child(9n) { border-right: 0; }
+    .cell:nth-child(n+73) { border-bottom: 0; }
+    .cell:nth-child(3n):not(:nth-child(9n)) { border-right: 2px solid #829087; }
+    .cell:nth-child(n+19):nth-child(-n+27),
+    .cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid #829087; }
+    .cell:focus { position: relative; z-index: 1; background: #eef4ed; box-shadow: inset 0 0 0 2px #659071; }
+    .cell.given { color: #252a25; font-weight: 720; }
+    .cell.solved { background: #f2f7f0; }
+    .cell.conflict { color: var(--danger); background: #fff0ed; }
+    .cell.testing { color: #735b17; background: #fff3c7; }
+    .cell.placed { color: #245c3c; background: #e4f2e5; }
+    .cell.backtracking, .cell.rejected { color: #9a3e35; background: #ffe5df; }
+    .board-hint { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 12px 3px 0; color: var(--muted); font-size: 11px; }
+    .legend { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 7px 10px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 5px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; background: #252a25; }
+    .legend-dot.answer { background: #8ba58b; }
+    .legend-dot.testing { background: #dfb842; }
+    .legend-dot.erasing { background: #d77b6b; }
+
+    .panel { padding-top: 5px; }
+    .panel h2 { margin: 0 0 8px; font-size: 17px; font-weight: 700; letter-spacing: -.02em; }
+    .panel-copy { margin: 0 0 22px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .solve-button {
+      display: flex;
+      width: 100%;
+      min-height: 53px;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 0;
+      border-radius: 9px;
+      color: #fff;
+      background: var(--accent);
+      font-size: 14px;
+      font-weight: 700;
+      box-shadow: 0 5px 12px rgba(56, 107, 83, .16);
+      transition: background .15s ease, transform .15s ease;
+    }
+    .solve-button:hover { transform: translateY(-1px); background: #2f5d47; }
+    .solve-button:focus-visible, .secondary-button:focus-visible, .speed-select:focus-visible { outline: 3px solid #a3c3a9; outline-offset: 3px; }
+    .solve-button:disabled { cursor: wait; opacity: .72; }
+    .button-icon { font-size: 18px; line-height: 1; }
+    .secondary-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 10px; }
+    .secondary-button { min-height: 42px; border: 1px solid #dfe3db; border-radius: 8px; color: #414941; background: rgba(255,255,255,.76); font-size: 12px; font-weight: 650; }
+    .secondary-button:hover { border-color: #aab8aa; background: #fff; }
+    .secondary-button:disabled, .speed-select:disabled { cursor: not-allowed; opacity: .55; }
+    .instant-button { width: 100%; margin-top: 9px; border-color: #d9e6d9; color: var(--accent); background: var(--accent-light); }
+    .step-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 10px; }
+    .step-controls[hidden] { display: none; }
+    .speed-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 15px; color: var(--muted); font-size: 12px; }
+    .speed-select { min-height: 35px; padding: 0 28px 0 10px; border: 1px solid #dfe3db; border-radius: 7px; color: #414941; background: #fff; font-size: 12px; }
+
+    .status {
+      display: flex;
+      min-height: 63px;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 19px;
+      padding: 13px;
+      border: 1px solid #e4e8df;
+      border-radius: 9px;
+      background: rgba(255,255,255,.62);
+      color: #596158;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .status-indicator { flex: 0 0 auto; width: 7px; height: 7px; margin-top: 4px; border-radius: 50%; background: #99a193; }
+    .status[data-kind="success"] .status-indicator { background: var(--accent); }
+    .status[data-kind="error"] .status-indicator { background: var(--danger); }
+
+    .how-it-works { margin-top: 29px; padding-top: 20px; border-top: 1px solid #e0e3dc; }
+    .how-it-works h3 { margin: 0 0 8px; font-size: 12px; font-weight: 750; }
+    .how-it-works p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    footer { padding: 0 0 28px; color: #92978f; text-align: center; font-size: 11px; }
+
+    @media (max-width: 760px) {
+      .shell { width: min(560px, calc(100% - 32px)); }
+      main { padding: 42px 0 48px; }
+      .workspace { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+      .board-wrap { padding: 10px; }
+      .panel { padding: 0 2px; }
+      .intro { margin-bottom: 26px; }
+      .header-note { font-size: 11px; }
+    }
+
+    @media (max-width: 390px) {
+      .shell { width: calc(100% - 22px); }
+      .board-wrap { padding: 7px; }
+      .cell { font-size: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand"><span class="brand-mark" aria-hidden="true">9</span><span>SUDOKU STUDIO</span></div>
+      <div class="header-note">A little clarity, one square at a time.</div>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <div class="eyebrow">Your personal puzzle solver</div>
+        <h1 id="page-title">Make room for a little logic.</h1>
+        <p>Enter the numbers you know, and let the solver fill in the rest. Each row, column, and 3 × 3 box needs the numbers 1 through 9.</p>
+      </section>
+
+      <section class="workspace" aria-label="Sudoku solver">
+        <div>
+          <div class="board-wrap">
+            <div id="board" class="board" role="grid" aria-label="Sudoku puzzle"></div>
+            <div class="board-hint">
+              <span>Click a square and type 1–9</span>
+              <span class="legend">
+                <span class="legend-item"><span class="legend-dot"></span>Clue</span>
+                <span class="legend-item"><span class="legend-dot testing"></span>Testing</span>
+                <span class="legend-item"><span class="legend-dot answer"></span>Placed</span>
+                <span class="legend-item"><span class="legend-dot erasing"></span>Erasing</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <aside class="panel">
+          <h2>Watch the logic unfold</h2>
+          <p class="panel-copy">The solver tests a number, places it when it fits, and erases it again if that choice leads to a dead end.</p>
+          <button id="solve" class="solve-button" type="button"><span class="button-icon" aria-hidden="true">↗</span> Solve puzzle</button>
+          <button id="solve-instant" class="secondary-button instant-button" type="button">Solve instantly</button>
+          <div id="step-controls" class="step-controls" hidden>
+            <button id="pause" class="secondary-button" type="button">Pause</button>
+            <button id="step" class="secondary-button" type="button">Step once</button>
+          </div>
+          <label class="speed-row" for="speed">
+            <span>Animation speed</span>
+            <select id="speed" class="speed-select">
+              <option value="0" selected>Fast</option>
+              <option value="4">Steady</option>
+              <option value="20">Slow</option>
+            </select>
+          </label>
+          <div class="secondary-actions">
+            <button id="example" class="secondary-button" type="button">Load example</button>
+            <button id="clear" class="secondary-button" type="button">Clear board</button>
+          </div>
+          <div id="status" class="status" data-kind="info" role="status" aria-live="polite">
+            <span class="status-indicator" aria-hidden="true"></span>
+            <span id="status-message">A sample puzzle is ready. You can edit any square or load your own.</span>
+          </div>
+          <div class="how-it-works">
+            <h3>How it works</h3>
+            <p>Watch each candidate get tested, placed, or erased during backtracking. Pause at any time, or use Step once to advance one move.</p>
+          </div>
+        </aside>
+      </section>
+    </main>
+    <footer>Take your time. The next number will come.</footer>
+  </div>
+
+  <script>
+    (() => {
+      const example = [
+        [5, 3, 0, 0, 7, 0, 0, 0, 0],
+        [6, 0, 0, 1, 9, 5, 0, 0, 0],
+        [0, 9, 8, 0, 0, 0, 0, 6, 0],
+        [8, 0, 0, 0, 6, 0, 0, 0, 3],
+        [4, 0, 0, 8, 0, 3, 0, 0, 1],
+        [7, 0, 0, 0, 2, 0, 0, 0, 6],
+        [0, 6, 0, 0, 0, 0, 2, 8, 0],
+        [0, 0, 0, 4, 1, 9, 0, 0, 5],
+        [0, 0, 0, 0, 8, 0, 0, 7, 9]
+      ];
+
+      const boardElement = document.getElementById("board");
+      const statusElement = document.getElementById("status");
+      const statusMessage = document.getElementById("status-message");
+      const solveButton = document.getElementById("solve");
+      const instantSolveButton = document.getElementById("solve-instant");
+      const pauseButton = document.getElementById("pause");
+      const stepButton = document.getElementById("step");
+      const stepControls = document.getElementById("step-controls");
+      const speedSelect = document.getElementById("speed");
+      const exampleButton = document.getElementById("example");
+      const clearButton = document.getElementById("clear");
+      let animationPaused = false;
+      let stepRequested = false;
+      let resumeAnimation = null;
+      let finishAnimationDelay = null;
+      let activeRunId = 0;
+      let animationRunning = false;
+      let activePuzzle = null;
+
+      function cells() {
+        return Array.from(boardElement.querySelectorAll("input"));
+      }
+
+      function readBoard() {
+        const inputs = cells();
+        return Array.from({ length: 9 }, (_, row) =>
+          Array.from({ length: 9 }, (_, col) => Number(inputs[row * 9 + col].value) || 0)
+        );
+      }
+
+      function setStatus(message, kind) {
+        statusMessage.textContent = message;
+        statusElement.dataset.kind = kind;
+      }
+
+      function hasConflict(board, row, col) {
+        const value = board[row][col];
+        if (value === 0) return false;
+
+        for (let index = 0; index < 9; index++) {
+          if (index !== col && board[row][index] === value) return true;
+          if (index !== row && board[index][col] === value) return true;
+        }
+
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+        for (let r = boxRow; r < boxRow + 3; r++) {
+          for (let c = boxCol; c < boxCol + 3; c++) {
+            if ((r !== row || c !== col) && board[r][c] === value) return true;
+          }
+        }
+        return false;
+      }
+
+      function updateConflicts() {
+        const board = readBoard();
+        cells().forEach((input, index) => {
+          const row = Math.floor(index / 9);
+          const col = index % 9;
+          input.classList.toggle("conflict", hasConflict(board, row, col));
+        });
+      }
+
+      function isSafe(board, row, col, number) {
+        for (let index = 0; index < 9; index++) {
+          if (board[row][index] === number || board[index][col] === number) return false;
+        }
+
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+        for (let r = boxRow; r < boxRow + 3; r++) {
+          for (let c = boxCol; c < boxCol + 3; c++) {
+            if (board[r][c] === number) return false;
+          }
+        }
+        return true;
+      }
+
+      function sleep(milliseconds) {
+        return new Promise(resolve => {
+          const timer = setTimeout(() => {
+            if (finishAnimationDelay === cancelDelay) finishAnimationDelay = null;
+            resolve();
+          }, milliseconds);
+          const cancelDelay = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          finishAnimationDelay = cancelDelay;
+        });
+      }
+
+      async function waitForAnimationStep(runId) {
+        if (animationPaused) {
+          let resume;
+          await new Promise(resolve => {
+            resume = resolve;
+            resumeAnimation = resolve;
+          });
+          if (resumeAnimation === resume) resumeAnimation = null;
+        }
+
+        if (runId !== activeRunId) return false;
+        if (stepRequested) {
+          stepRequested = false;
+          animationPaused = true;
+          pauseButton.textContent = "Resume";
+        }
+        await sleep(Number(speedSelect.value));
+        return runId === activeRunId;
+      }
+
+      function progressMessage(action, stats) {
+        return `${action} · ${stats.tested} tests, ${stats.placed} placements, ${stats.erased} erasures`;
+      }
+
+      async function solveAnimated(board, row, col, stats, runId) {
+        if (runId !== activeRunId) return null;
+        if (row === 9) return true;
+
+        const nextRow = col === 8 ? row + 1 : row;
+        const nextCol = col === 8 ? 0 : col + 1;
+        if (board[row][col] !== 0) return solveAnimated(board, nextRow, nextCol, stats, runId);
+
+        const input = cells()[row * 9 + col];
+        for (let number = 1; number <= 9; number++) {
+          input.value = number;
+          input.classList.add("testing");
+          stats.tested++;
+          setStatus(progressMessage(`Testing ${number} at row ${row + 1}, column ${col + 1}`, stats), "info");
+          if (!await waitForAnimationStep(runId)) return null;
+
+          if (isSafe(board, row, col, number)) {
+            board[row][col] = number;
+            input.classList.remove("testing");
+            input.classList.add("placed");
+            stats.placed++;
+            setStatus(progressMessage(`Place ${number} at row ${row + 1}, column ${col + 1}`, stats), "info");
+            if (!await waitForAnimationStep(runId)) return null;
+
+            const result = await solveAnimated(board, nextRow, nextCol, stats, runId);
+            if (result === true || result === null) return result;
+
+            input.classList.remove("placed");
+            input.classList.add("backtracking");
+            stats.erased++;
+            setStatus(progressMessage(`Backtrack: erase ${number} at row ${row + 1}, column ${col + 1}`, stats), "info");
+            if (!await waitForAnimationStep(runId)) return null;
+            board[row][col] = 0;
+            input.value = "";
+            input.classList.remove("backtracking");
+          } else {
+            input.classList.remove("testing");
+            input.classList.add("rejected");
+            setStatus(progressMessage(`Reject ${number} at row ${row + 1}, column ${col + 1} — it conflicts with an existing number`, stats), "info");
+            if (!await waitForAnimationStep(runId)) return null;
+            input.value = "";
+            input.classList.remove("rejected");
+          }
+        }
+        return false;
+      }
+
+      function solveInstantly(board, row, col) {
+        if (row === 9) return true;
+
+        const nextRow = col === 8 ? row + 1 : row;
+        const nextCol = col === 8 ? 0 : col + 1;
+        if (board[row][col] !== 0) return solveInstantly(board, nextRow, nextCol);
+
+        for (let number = 1; number <= 9; number++) {
+          if (isSafe(board, row, col, number)) {
+            board[row][col] = number;
+            if (solveInstantly(board, nextRow, nextCol)) return true;
+            board[row][col] = 0;
+          }
+        }
+        return false;
+      }
+
+      function showBoard(board, givens) {
+        cells().forEach((input, index) => {
+          const row = Math.floor(index / 9);
+          const col = index % 9;
+          input.value = board[row][col] || "";
+          input.classList.toggle("given", givens[row][col] !== 0);
+          input.classList.toggle("solved", givens[row][col] === 0 && board[row][col] !== 0);
+          input.classList.remove("conflict", "testing", "placed", "backtracking", "rejected");
+        });
+      }
+
+      function hasInvalidClues(board) {
+        return cells().some((input, index) =>
+          hasConflict(board, Math.floor(index / 9), index % 9)
+        );
+      }
+
+      function setBoardDisabled(disabled) {
+        cells().forEach(input => { input.disabled = disabled; });
+        exampleButton.disabled = disabled;
+        clearButton.disabled = disabled;
+      }
+
+      function loadBoard(board) {
+        cells().forEach((input, index) => {
+          const value = board[Math.floor(index / 9)][index % 9];
+          input.value = value || "";
+          input.classList.toggle("given", value !== 0);
+          input.classList.remove("solved", "conflict", "testing", "placed", "backtracking", "rejected");
+        });
+        setStatus("Puzzle loaded. Edit any square, then solve when you’re ready.", "info");
+        updateConflicts();
+      }
+
+      for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+          const input = document.createElement("input");
+          input.className = "cell";
+          input.type = "text";
+          input.inputMode = "numeric";
+          input.autocomplete = "off";
+          input.maxLength = 1;
+          input.setAttribute("role", "gridcell");
+          input.setAttribute("aria-label", `Row ${row + 1}, column ${col + 1}`);
+          input.addEventListener("input", () => {
+            input.value = input.value.replace(/[^1-9]/g, "").slice(0, 1);
+            input.classList.remove("given", "solved", "testing", "placed", "backtracking", "rejected");
+            updateConflicts();
+          });
+          input.addEventListener("keydown", event => {
+            if (event.key === "ArrowRight" && col < 8) cells()[row * 9 + col + 1].focus();
+            if (event.key === "ArrowLeft" && col > 0) cells()[row * 9 + col - 1].focus();
+            if (event.key === "ArrowDown" && row < 8) cells()[(row + 1) * 9 + col].focus();
+            if (event.key === "ArrowUp" && row > 0) cells()[(row - 1) * 9 + col].focus();
+          });
+          boardElement.appendChild(input);
+        }
+      }
+
+      solveButton.addEventListener("click", async () => {
+        const puzzle = readBoard();
+        if (hasInvalidClues(puzzle)) {
+          setStatus("Some clues conflict with one another. Correct the highlighted squares before solving.", "error");
+          updateConflicts();
+          return;
+        }
+
+        const givens = puzzle.map(row => row.slice());
+        const solution = puzzle.map(row => row.slice());
+        const stats = { tested: 0, placed: 0, erased: 0 };
+        activePuzzle = puzzle.map(row => row.slice());
+        animationRunning = true;
+        const runId = ++activeRunId;
+        animationPaused = false;
+        stepRequested = false;
+        solveButton.disabled = true;
+        setBoardDisabled(true);
+        stepControls.hidden = false;
+        pauseButton.textContent = "Pause";
+        setStatus("Starting the step-by-step search…", "info");
+
+        const solved = await solveAnimated(solution, 0, 0, stats, runId);
+        if (runId !== activeRunId) return;
+
+        animationRunning = false;
+        activePuzzle = null;
+        stepControls.hidden = true;
+        solveButton.disabled = false;
+        setBoardDisabled(false);
+        animationPaused = false;
+        stepRequested = false;
+
+        if (solved) {
+          showBoard(solution, givens);
+          setStatus(`Solved! ${stats.tested} candidates tested, ${stats.placed} placements made, and ${stats.erased} backtracks.`, "success");
+        } else {
+          showBoard(puzzle, givens);
+          setStatus(`No solution found. ${stats.tested} candidates tested, with ${stats.erased} backtracks. Check the clues and try again.`, "error");
+        }
+      });
+
+      instantSolveButton.addEventListener("click", () => {
+        const puzzle = animationRunning
+          ? activePuzzle.map(row => row.slice())
+          : readBoard();
+        if (hasInvalidClues(puzzle)) {
+          setStatus("Some clues conflict with one another. Correct the highlighted squares before solving.", "error");
+          updateConflicts();
+          return;
+        }
+
+        if (animationRunning) {
+          activeRunId++;
+          animationRunning = false;
+          activePuzzle = null;
+          animationPaused = false;
+          stepRequested = false;
+          if (resumeAnimation) {
+            const resume = resumeAnimation;
+            resumeAnimation = null;
+            resume();
+          }
+          if (finishAnimationDelay) {
+            const finishDelay = finishAnimationDelay;
+            finishAnimationDelay = null;
+            finishDelay();
+          }
+        }
+
+        const givens = puzzle.map(row => row.slice());
+        const solution = puzzle.map(row => row.slice());
+        solveButton.disabled = true;
+        instantSolveButton.disabled = true;
+        setBoardDisabled(true);
+        stepControls.hidden = true;
+        setStatus("Solving instantly…", "info");
+
+        const solved = solveInstantly(solution, 0, 0);
+        solveButton.disabled = false;
+        instantSolveButton.disabled = false;
+        setBoardDisabled(false);
+
+        if (solved) {
+          showBoard(solution, givens);
+          setStatus("Solved instantly! Your puzzle follows all the Sudoku rules.", "success");
+        } else {
+          showBoard(puzzle, givens);
+          setStatus("This puzzle has no solution. Check the clues and try again.", "error");
+        }
+      });
+
+      pauseButton.addEventListener("click", () => {
+        animationPaused = !animationPaused;
+        pauseButton.textContent = animationPaused ? "Resume" : "Pause";
+        if (!animationPaused && resumeAnimation) resumeAnimation();
+      });
+
+      stepButton.addEventListener("click", () => {
+        stepRequested = true;
+        animationPaused = false;
+        pauseButton.textContent = "Pause";
+        if (resumeAnimation) resumeAnimation();
+      });
+
+      exampleButton.addEventListener("click", () => loadBoard(example));
+      clearButton.addEventListener("click", () => {
+        loadBoard(Array.from({ length: 9 }, () => Array(9).fill(0)));
+        setStatus("Board cleared. Enter your clues to get started.", "info");
+        cells()[0].focus();
+      });
+
+      loadBoard(example);
+      setStatus("A sample puzzle is ready. You can edit any square or load your own.", "info");
+    })();
+  </script>
+</body>
+</html>
